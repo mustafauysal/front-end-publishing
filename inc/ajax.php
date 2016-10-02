@@ -174,6 +174,37 @@ function fep_process_form_input()
 		if (is_wp_error($new_post_id))
 			throw new Exception($new_post_id->get_error_message(), 1);
 
+		if (true === apply_filters('fep_assign_iamges', true)) {
+			$images = array();
+			global $wpdb;
+
+			$dom = new DOMDocument("1.0", "UTF-8");
+			@$dom->loadHTML($post_content);
+			foreach ($dom->getElementsByTagName('img') as $key => $tag) {
+				$img_src = $tag->getAttribute('src');
+				if (strpos($img_src, site_url())) {
+					$images[] = esc_url_raw($tag->getAttribute('src'));
+				}
+			}
+
+			$image_count = count($images);
+
+			if ($image_count > 0) {
+				if ($image_count === 1) {
+					$guid_in = "'" . $images[0] . "'";
+				} else {
+					$guid_in = "'" . implode("','", $images) . "'";
+				}
+				$qry    = "UPDATE " . $wpdb->prefix . 'posts' . " set post_parent='" . $new_post_id
+				          . "' where post_parent='0' and guid in($guid_in) and post_status='inherit' and post_type='attachment' and  post_mime_type like 'image/%'";
+				$status = $wpdb->query($qry);
+
+				if (false === $status) {
+					throw new Exception(__("An error occurred while associating images to article", 'frontend-publishing'), 1);
+				}
+			}
+		}
+
 		if (!$fep_misc['disable_author_bio']) {
 			if ($fep_misc['nofollow_bio_links'])
 				$about_the_author = wp_rel_nofollow($_POST['about_the_author']);
