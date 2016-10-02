@@ -174,7 +174,7 @@ function fep_process_form_input()
 		if (is_wp_error($new_post_id))
 			throw new Exception($new_post_id->get_error_message(), 1);
 
-		if (true === apply_filters('fep_assign_iamges', true)) {
+		if (true === apply_filters('fep_assign_images', true)) {
 			$images = array();
 			global $wpdb;
 
