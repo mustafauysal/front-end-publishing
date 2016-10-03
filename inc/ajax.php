@@ -183,7 +183,10 @@ function fep_process_form_input()
 			foreach ($dom->getElementsByTagName('img') as $key => $tag) {
 				$img_src = $tag->getAttribute('src');
 				if (strpos($img_src, site_url())) {
-					$images[] = esc_url_raw($tag->getAttribute('src'));
+					$maybe_attachment = fep_get_attachment_id_from_url(esc_url_raw($tag->getAttribute('src')));
+					if ( ! empty( $maybe_attachment )) {
+						$images[] = $maybe_attachment;
+					}
 				}
 			}
 
@@ -191,12 +194,12 @@ function fep_process_form_input()
 
 			if ($image_count > 0) {
 				if ($image_count === 1) {
-					$guid_in = "'" . $images[0] . "'";
+					$post_ids = "'" . $images[0] . "'";
 				} else {
-					$guid_in = "'" . implode("','", $images) . "'";
+					$post_ids = "'" . implode("','", $images) . "'";
 				}
 				$qry    = "UPDATE " . $wpdb->prefix . 'posts' . " set post_parent='" . $new_post_id
-				          . "' where post_parent='0' and guid in($guid_in) and post_status='inherit' and post_type='attachment' and  post_mime_type like 'image/%'";
+				          . "' where post_parent='0' and ID in($post_ids) and post_status='inherit' and post_type='attachment' and  post_mime_type like 'image/%'";
 				$status = $wpdb->query($qry);
 
 				if (false === $status) {
@@ -236,3 +239,42 @@ function fep_process_form_input()
 
 add_action('wp_ajax_fep_process_form_input', 'fep_process_form_input');
 add_action('wp_ajax_nopriv_fep_process_form_input', 'fep_process_form_input');
+
+
+/**
+ * Fetch $attachment_id from $attachment_url
+ * This might be slow on large setups. FYI
+ *
+ * @link https://philipnewcomer.net/2012/11/get-the-attachment-id-from-an-image-url-in-wordpress/
+ * @param string $attachment_url
+ *
+ * @return bool|null|string|void
+ */
+function fep_get_attachment_id_from_url( $attachment_url = '' ) {
+
+	global $wpdb;
+	$attachment_id = false;
+
+	// If there is no url, return.
+	if ( '' == $attachment_url )
+		return;
+
+	// Get the upload directory paths
+	$upload_dir_paths = wp_upload_dir();
+
+	// Make sure the upload path base directory exists in the attachment URL, to verify that we're working with a media library image
+	if ( false !== strpos( $attachment_url, $upload_dir_paths['baseurl'] ) ) {
+
+		// If this is the URL of an auto-generated thumbnail, get the URL of the original image
+		$attachment_url = preg_replace( '/-\d+x\d+(?=\.(jpg|jpeg|png|gif)$)/i', '', $attachment_url );
+
+		// Remove the upload path base directory from the attachment URL
+		$attachment_url = str_replace( $upload_dir_paths['baseurl'] . '/', '', $attachment_url );
+
+		// Finally, run a custom database query to get the attachment ID from the modified attachment URL
+		$attachment_id = $wpdb->get_var( $wpdb->prepare( "SELECT wposts.ID FROM $wpdb->posts wposts, $wpdb->postmeta wpostmeta WHERE wposts.ID = wpostmeta.post_id AND wpostmeta.meta_key = '_wp_attached_file' AND wpostmeta.meta_value = '%s' AND wposts.post_type = 'attachment'", $attachment_url ) );
+
+	}
+
+	return $attachment_id;
+}
